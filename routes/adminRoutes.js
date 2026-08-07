@@ -21,6 +21,12 @@ router.post('/login', async (req, res) => {
     const adminEmail = process.env.ADMIN_EMAIL
     const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH
 
+    if (!adminId || !adminPasswordHash) {
+      return res.status(500).json({
+        message: 'Admin credentials are not configured on the server.',
+      })
+    }
+
     const isValidId = id && adminId && id === adminId
     const isValidEmail = email && adminEmail && email === adminEmail
 
@@ -52,10 +58,12 @@ router.post('/login', async (req, res) => {
       }
     )
 
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+
     res.cookie('adminToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 2 * 60 * 60 * 1000,
     })
 
@@ -74,7 +82,13 @@ router.post('/login', async (req, res) => {
 
 // ADMIN LOGOUT
 router.post('/logout', (req, res) => {
-  res.clearCookie('adminToken')
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+
+  res.clearCookie('adminToken', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+  })
 
   res.json({
     success: true,
