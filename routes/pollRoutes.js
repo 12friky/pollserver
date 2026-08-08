@@ -1,6 +1,7 @@
 import express from 'express'
 import Poll from '../models/Poll.js'
 import Vote from '../models/Vote.js'
+import { generatePollSocialPreview, getSocialPreviewUrl } from '../utils/socialPreview.js'
 
 const router = express.Router()
 
@@ -30,6 +31,7 @@ router.get('/current', async (req, res) => {
     res.json({
       success: true,
       poll,
+      shareImageUrl: getSocialPreviewUrl(req, poll),
     })
   } catch (error) {
     console.error(error)

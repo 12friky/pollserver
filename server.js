@@ -12,10 +12,20 @@ import Poll from './models/Poll.js'
 import Vote from './models/Vote.js'
 import pollRoutes from './routes/pollRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
+import { createReadStream } from 'node:fs'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+import { generatePollSocialPreview, getSocialPreviewFilePath, getSocialPreviewUrl } from './utils/socialPreview.js'
 
 dotenv.config()
 
 const app = express()
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const publicDir = path.join(__dirname, 'public')
+
+app.use(express.static(publicDir))
 
 // Database
 await connectDB()
@@ -110,6 +120,35 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/polls', pollRoutes)
 app.use('/api/admin', adminRoutes)
+
+app.get('/api/polls/:id/share-image', async (req, res) => {
+  try {
+    const poll = await Poll.findOne({
+      $or: [{ _id: req.params.id }, { pollId: req.params.id }],
+    })
+
+    if (!poll) {
+      return res.status(404).send('Poll not found')
+    }
+
+    const filePath = getSocialPreviewFilePath(poll)
+
+    if (!existsSync(filePath)) {
+      await generatePollSocialPreview(poll)
+    }
+
+    if (!existsSync(filePath)) {
+      return res.status(500).send('Unable to generate poll preview image')
+    }
+
+    res.setHeader('Content-Type', 'image/png')
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300')
+    createReadStream(filePath).pipe(res)
+  } catch (error) {
+    console.error(error)
+    res.status(500).send('Unable to generate poll preview image')
+  }
+})
 
 // 404
 app.use((req, res) => {
