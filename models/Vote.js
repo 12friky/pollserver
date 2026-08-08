@@ -3,9 +3,14 @@ import mongoose from 'mongoose'
 const voteSchema = new mongoose.Schema(
   {
     pollId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+
+    pollRef: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Poll',
-      required: true,
       index: true,
     },
 

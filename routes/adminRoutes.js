@@ -121,6 +121,8 @@ router.put('/poll', protectAdmin, async (req, res) => {
       question,
       status,
       options,
+      pollId,
+      mode,
     } = req.body
 
     if (!question?.trim()) {
@@ -129,7 +131,7 @@ router.put('/poll', protectAdmin, async (req, res) => {
       })
     }
 
-    if (!['active', 'closed'].includes(status)) {
+    if (!['draft', 'active', 'closed', 'archived'].includes(status)) {
       return res.status(400).json({
         message: 'Invalid poll status.',
       })
@@ -149,26 +151,19 @@ router.put('/poll', protectAdmin, async (req, res) => {
       votes: Number(option.votes) || 0,
     }))
 
-    let poll = await Poll.findOne().sort({
-      createdAt: -1,
-    })
+    let poll
 
-    if (!poll) {
-      poll = await Poll.create({
-        question: question.trim(),
-        status,
-        options: cleanedOptions,
-      })
-    } else {
+    if (mode === 'edit' && pollId) {
+      poll = await Poll.findOne({ pollId })
+
+      if (!poll) {
+        return res.status(404).json({
+          message: 'Poll not found.',
+        })
+      }
+
       poll.question = question.trim()
       poll.status = status
-
-      /*
-       * Preserve existing vote counts.
-       *
-       * If an administrator edits the option text,
-       * existing votes shouldn't disappear.
-       */
       poll.options = cleanedOptions.map((newOption) => {
         const existingOption = poll.options.find(
           (oldOption) => oldOption.id === newOption.id
@@ -183,6 +178,19 @@ router.put('/poll', protectAdmin, async (req, res) => {
       })
 
       await poll.save()
+    } else {
+      if (status === 'active') {
+        await Poll.updateMany(
+          { status: 'active' },
+          { $set: { status: 'closed' } }
+        )
+      }
+
+      poll = await Poll.create({
+        question: question.trim(),
+        status,
+        options: cleanedOptions,
+      })
     }
 
     res.json({

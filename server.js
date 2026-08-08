@@ -8,6 +8,8 @@ import compression from 'compression'
 import pinoHttp from 'pino-http'
 
 import connectDB from './config/db.js'
+import Poll from './models/Poll.js'
+import Vote from './models/Vote.js'
 import pollRoutes from './routes/pollRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
 
@@ -17,6 +19,36 @@ const app = express()
 
 // Database
 await connectDB()
+
+async function backfillPollIdentifiers() {
+  try {
+    const pollsWithoutId = await Poll.find({
+      $or: [{ pollId: { $exists: false } }, { pollId: null }, { pollId: '' }],
+    })
+
+    for (const poll of pollsWithoutId) {
+      poll.pollId = poll.pollId || poll._id.toString()
+      await poll.save({ validateBeforeSave: false })
+    }
+
+    const votesWithoutPollId = await Vote.find({
+      $or: [{ pollId: { $exists: false } }, { pollId: null }, { pollId: '' }],
+    })
+
+    for (const vote of votesWithoutPollId) {
+      const poll = await Poll.findById(vote.pollRef || vote.pollId)
+      if (poll) {
+        vote.pollId = poll.pollId || poll._id.toString()
+        vote.pollRef = poll._id
+        await vote.save({ validateBeforeSave: false })
+      }
+    }
+  } catch (error) {
+    console.warn('Unable to backfill poll identifiers:', error)
+  }
+}
+
+await backfillPollIdentifiers()
 
 // Security headers
 app.use(helmet())

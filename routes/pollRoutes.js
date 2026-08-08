@@ -4,6 +4,14 @@ import Vote from '../models/Vote.js'
 
 const router = express.Router()
 
+const findPollByIdentifier = async (identifier) => {
+  if (!identifier) return null
+
+  return Poll.findOne({
+    $or: [{ _id: identifier }, { pollId: identifier }],
+  })
+}
+
 // GET CURRENT POLL
 router.get('/current', async (req, res) => {
   try {
@@ -35,7 +43,7 @@ router.get('/current', async (req, res) => {
 // GET POLL RESULTS
 router.get('/:id/results', async (req, res) => {
   try {
-    const poll = await Poll.findById(req.params.id)
+    const poll = await findPollByIdentifier(req.params.id)
 
     if (!poll) {
       return res.status(404).json({
@@ -70,6 +78,44 @@ router.get('/:id/results', async (req, res) => {
   }
 })
 
+// CHECK WHETHER THIS VOTER HAS ALREADY VOTED IN THIS POLL
+router.get('/:id/vote-status', async (req, res) => {
+  try {
+    const { voterId } = req.query
+
+    if (!voterId) {
+      return res.status(400).json({
+        message: 'voterId is required.',
+      })
+    }
+
+    const poll = await findPollByIdentifier(req.params.id)
+
+    if (!poll) {
+      return res.status(404).json({
+        message: 'Poll not found.',
+      })
+    }
+
+    const existingVote = await Vote.findOne({
+      pollId: poll.pollId || poll._id.toString(),
+      voterId,
+    })
+
+    res.json({
+      success: true,
+      hasVoted: Boolean(existingVote),
+      pollId: poll.pollId || poll._id.toString(),
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: 'Unable to check vote status.',
+    })
+  }
+})
+
 // SUBMIT VOTE
 router.post('/:id/vote', async (req, res) => {
   try {
@@ -81,7 +127,7 @@ router.post('/:id/vote', async (req, res) => {
       })
     }
 
-    const poll = await Poll.findById(req.params.id)
+    const poll = await findPollByIdentifier(req.params.id)
 
     if (!poll) {
       return res.status(404).json({
@@ -105,9 +151,11 @@ router.post('/:id/vote', async (req, res) => {
       })
     }
 
-    // Check whether this voter already voted
+    const pollIdentifier = poll.pollId || poll._id.toString()
+
+    // Check whether this voter already voted in this specific poll
     const existingVote = await Vote.findOne({
-      pollId: poll._id,
+      pollId: pollIdentifier,
       voterId,
     })
 
@@ -119,7 +167,8 @@ router.post('/:id/vote', async (req, res) => {
 
     // Store vote
     await Vote.create({
-      pollId: poll._id,
+      pollId: pollIdentifier,
+      pollRef: poll._id,
       optionId,
       voterId,
     })

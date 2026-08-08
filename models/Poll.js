@@ -38,6 +38,12 @@ const optionSchema = new mongoose.Schema(
 
 const pollSchema = new mongoose.Schema(
   {
+    pollId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+
     question: {
       type: String,
       required: true,
@@ -47,7 +53,7 @@ const pollSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ['active', 'closed'],
+      enum: ['draft', 'active', 'closed', 'archived'],
       default: 'active',
     },
 
@@ -65,5 +71,13 @@ const pollSchema = new mongoose.Schema(
     timestamps: true,
   }
 )
+
+pollSchema.pre('save', function (next) {
+  if (!this.pollId) {
+    this.pollId = this._id?.toString() || `poll-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  next()
+})
 
 export default mongoose.model('Poll', pollSchema)
